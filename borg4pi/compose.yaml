@@ -1,0 +1,16 @@
+services:
+
+  borg:
+    build:
+      context: .               # Path to your Dockerfile directory
+      dockerfile: Dockerfile   # Optional if it's just "Dockerfile"
+      platforms:
+        - linux/arm64          # Ensures it's built for ARM64
+    image: borg4pi:arm64       # The image name/tag to create
+    environment:
+      - TZ=America/Los_Angeles # Optional: set your timezone
+    volumes:
+      - ./data:/data           # Source data to back up
+      - ./repo:/repo           # Local backup repository
+    entrypoint: ["borg"]       # Make sure 'borg' runs by default
+    restart: "no"              # We run on-demand, not as a daemon

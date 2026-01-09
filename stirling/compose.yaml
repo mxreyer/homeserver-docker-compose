@@ -1,0 +1,64 @@
+services:
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_HOSTNAME=${CONF_HOSTNAME}
+      - TS_AUTH_KEY=${CONF_TS_KEY}
+      - TS_EXTRA_ARGS=--advertise-tags=tag:${CONF_TS_TAG}
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ../../docker-binds/stirling/tailscale/state:/var/lib/tailscale
+      - tailscale_sock:/tmp # for caddy access to tailscale.sock
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    networks:
+      - net
+    healthcheck:
+      test: tailscale status --peers=false --json | grep 'Online.*true'
+      start_period: 3s
+      interval: 1s
+      retries: 3
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:latest
+    environment:
+      CDY_DOMAIN: ${CONF_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_certs:/certs
+      - caddy_data:/data
+      - caddy_config:/config
+      - tailscale_sock:/var/run/tailscale/:ro # for access to tailscale.sock
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    restart: unless-stopped
+  
+  stirling-pdf:
+    image: docker.stirlingpdf.com/stirlingtools/stirling-pdf:latest
+    volumes:
+      - ../../docker-binds/stirling/StirlingPDF/trainingData:/usr/share/tessdata # Required for extra OCR languages
+      - ../../docker-binds/stirling/StirlingPDF/extraConfigs:/configs
+      - ../../docker-binds/stirling/StirlingPDF/customFiles:/customFiles/
+      - ../../docker-binds/stirling/StirlingPDF/logs:/logs/
+      - ../../docker-binds/stirling/StirlingPDF/pipeline:/pipeline/
+    environment:
+      - DISABLE_ADDITIONAL_FEATURES=false
+      - LANGS=en_US
+    networks:
+      - net
+    restart: unless-stopped
+
+volumes:
+  tailscale_sock:
+  caddy_certs:
+  caddy_config:
+  caddy_data:
+
+networks:
+  net:

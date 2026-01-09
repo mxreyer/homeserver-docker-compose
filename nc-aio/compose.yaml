@@ -1,0 +1,82 @@
+services:
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_HOSTNAME=${CONF_HOSTNAME}
+      - TS_AUTH_KEY=${CONF_TS_KEY}
+      - TS_EXTRA_ARGS=--advertise-tags=tag:${CONF_TS_TAG}
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ../../docker-binds/nc-aio/tailscale/state:/var/lib/tailscale
+      - tailscale_sock:/tmp # for caddy access to tailscale.sock
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    networks:
+      - nextcloud-aio
+    healthcheck:
+      test: tailscale status --peers=false --json | grep 'Online.*true'
+      start_period: 3s
+      interval: 1s
+      retries: 3
+    restart: unless-stopped
+
+  caddy:
+    build:
+      context: .
+      dockerfile: Caddy.Dockerfile
+    environment:
+      CDY_DOMAIN: ${CONF_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_certs:/certs
+      - caddy_data:/data
+      - caddy_config:/config
+      - tailscale_sock:/var/run/tailscale/:ro # for access to tailscale.sock
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nextcloud-aio-mastercontainer:
+    image: ghcr.io/nextcloud-releases/all-in-one:latest
+    init: true
+    container_name: nextcloud-aio-mastercontainer # This line cannot be changed
+    environment:
+      APACHE_PORT: 11000
+      APACHE_IP_BINDING: 127.0.0.1
+      # With the load balancer trick in the Caddyfile, this can be left enabled
+      # because the domaincheck container can be reached on CONF_DOMAIN!
+      SKIP_DOMAIN_VALIDATION: false
+    volumes:
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - nextcloud-aio
+    ports:
+      # Bind to tailscale IP of host (get via tailscale ip -4) so that the
+      # interface cannot be accessed via LAN connection to server. Binding to
+      # 127.0.0.1 won't work because we access the web interface via a browser
+      # from another machine on the tailnet. This should probably be combined
+      # with tailscale ACLs.
+      - ${CONF_BIND_IP}:8080:8080 # AIO interface, served via https and self-signed certificate.
+    restart: unless-stopped
+
+volumes:
+  nextcloud_aio_mastercontainer:
+    name: nextcloud_aio_mastercontainer # This line cannot be changed
+  caddy_certs:
+  caddy_config:
+  caddy_data:
+  tailscale_sock:
+
+networks:
+  # the name of this network cannot be changed because all the containers
+  # spawned by the mastercontainer are put on a network with this name. We need
+  # caddy to be both on this network and the tailscale network. The easiest
+  # solution is to simply put all containers on the network "nextcloud-aio". 
+  nextcloud-aio:
+    name: nextcloud-aio

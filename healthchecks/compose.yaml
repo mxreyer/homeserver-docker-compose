@@ -1,0 +1,72 @@
+services:
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_HOSTNAME=${CONF_HOSTNAME}
+      - TS_AUTH_KEY=${CONF_TS_KEY}
+      - TS_EXTRA_ARGS=--advertise-tags=tag:${CONF_TS_TAG}
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ../../docker-binds/healthchecks/tailscale/state:/var/lib/tailscale
+      - tailscale_sock:/tmp # for caddy access to tailscale.sock
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    networks:
+      - net
+    healthcheck:
+      test: tailscale status --peers=false --json | grep 'Online.*true'
+      start_period: 3s
+      interval: 1s
+      retries: 3
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:latest
+    environment:
+      CDY_DOMAIN: ${CONF_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_certs:/certs
+      - caddy_data:/data
+      - caddy_config:/config
+      - tailscale_sock:/var/run/tailscale/:ro # for access to tailscale.sock
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=$DB_NAME
+      - POSTGRES_PASSWORD=$DB_PASSWORD
+    networks:
+      - net
+    restart: unless-stopped
+
+  web:
+    image: healthchecks/healthchecks:latest
+    command: bash -c 'while !</dev/tcp/db/5432; do sleep 1; done; uwsgi /opt/healthchecks/docker/uwsgi.ini'
+    env_file:
+      - .env
+    networks:
+      - net
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  tailscale_sock:
+  caddy_certs:
+  caddy_config:
+  caddy_data:
+  db_data:
+
+networks:
+  net:

@@ -1,0 +1,135 @@
+# - Docker volumes for storing data are managed by Docker.
+# - Folders for importing and exporting files are created in the same directory
+#   as this file and mounted to the correct folders inside the container.
+
+services:
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_HOSTNAME=${CONF_HOSTNAME}
+      - TS_AUTH_KEY=${CONF_TS_KEY}
+      - TS_EXTRA_ARGS=--advertise-tags=tag:${CONF_TS_TAG}
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ../../docker-binds/paperless/tailscale/state:/var/lib/tailscale
+      - tailscale_sock:/tmp # for caddy access to tailscale.sock
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    networks:
+      - net
+    healthcheck:
+      test: tailscale status --peers=false --json | grep 'Online.*true'
+      start_period: 3s
+      interval: 1s
+      retries: 3
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:latest
+    environment:
+      CDY_DOMAIN: ${CONF_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_certs:/certs
+      - caddy_data:/data
+      - caddy_config:/config
+      - tailscale_sock:/var/run/tailscale/:ro # for access to tailscale.sock
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    restart: unless-stopped
+
+  broker:
+    image: docker.io/library/redis:8
+    volumes:
+      - redisdata:/data
+    networks:
+      - net
+    depends_on:
+      - tailscale
+    restart: unless-stopped
+
+  db:
+    image: docker.io/library/postgres:18
+    volumes:
+      - pgdata:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: $CONF_DBPASS
+    networks:
+      - net
+    depends_on:
+      - tailscale
+    restart: unless-stopped
+
+  webserver:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    #env_file: webserver.env
+    environment:
+      USERMAP_UID: 1000
+      USERMAP_GID: 1000
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+      PAPERLESS_DBPASS: $CONF_DBPASS
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
+      PAPERLESS_TIKA_ENDPOINT: http://tika:9998
+      PAPERLESS_SECRET_KEY: $CONF_SECRET_KEY
+      PAPERLESS_FILENAME_FORMAT: "{{correspondent}}/{{created}}-{{title}}"
+      PAPERLESS_URL: https://${CONF_DOMAIN}
+      PAPERLESS_TIME_ZONE: America/Los_Angeles
+      PAPERLESS_OCR_LANGUAGE: eng+deu
+    volumes:
+      - data:/usr/src/paperless/data
+      - media:/usr/src/paperless/media
+      - ../../docker-binds/paperless/export:/usr/src/paperless/export
+      - ../../docker-binds/paperless/consume:/usr/src/paperless/consume
+    networks:
+      - net
+    depends_on:
+      - tailscale
+      - db
+      - broker
+      - gotenberg
+      - tika
+    restart: unless-stopped
+
+  gotenberg:
+    image: docker.io/gotenberg/gotenberg:8.24
+    # The gotenberg chromium route is used to convert .eml files. We do not
+    # want to allow external content like tracking pixels or even javascript.
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+    networks:
+      - net
+    depends_on:
+      - tailscale
+    restart: unless-stopped
+
+  tika:
+    image: docker.io/apache/tika:latest
+    networks:
+      - net
+    depends_on:
+      - tailscale
+    restart: unless-stopped
+
+volumes:
+  tailscale_sock:
+  caddy_certs:
+  caddy_config:
+  caddy_data:
+  data:
+  media:
+  pgdata:
+  redisdata:
+
+networks:
+  net:

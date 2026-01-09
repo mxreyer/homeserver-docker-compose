@@ -1,0 +1,5 @@
+Thank you, ChatGPT!
+
+- build image (on ARM64): `docker build -t borg4pi:arm64 .`
+
+- test run: `docker run --rm -it borg4pi:arm64 --version`

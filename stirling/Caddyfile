@@ -1,0 +1,13 @@
+# Serve upstream service over HTTPS (Service listens to HTTP, not HTTPS!)
+https://{$CDY_DOMAIN} {
+    reverse_proxy stirling-pdf:8080 {
+	# tell the upstream that the original connection was HTTPS
+        header_up x-forwarded-proto "https"
+        header_up host {host}
+    }
+}
+
+# Redirect all HTTP requests to HTTPS
+http://{$CDY_DOMAIN} {
+    redir https://{$CDY_DOMAIN}{uri} permanent
+}
