@@ -39,6 +39,8 @@ services:
       SMTP_FROM_EMAIL: ${CONF_SMTP_FROM_EMAIL}
       SMTP_USER: ${CONF_SMTP_USER}
       SMTP_PASSWORD: ${CONF_SMTP_PASSWORD}
+      SMTP_PORT: ${CONF_SMTP_PORT}
+      SMTP_AUTH_STRATEGY: ${CONF_SMTP_AUTH_STRATEGY}
       OPENAI_API_KEY: ${CONF_OPENAI_API_KEY}
     network_mode: service:tailscale
     depends_on:
