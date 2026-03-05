@@ -1,0 +1,126 @@
+#
+# The Firefly III Data Importer will ask you for the Firefly III URL and a "Client ID".
+# You can generate the Client ID at http://localhost/profile (after registering)
+# The Firefly III URL is: http://app:8080
+#
+# Other URL's will give 500 | Server Error
+#
+
+services:
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_HOSTNAME=${CONF_HOSTNAME}
+      - TS_AUTH_KEY=${CONF_TS_KEY}
+      - TS_EXTRA_ARGS=--advertise-tags=tag:${CONF_TS_TAG}
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ../../docker-binds/firefly/tailscale/state:/var/lib/tailscale
+      - tailscale_sock:/tmp # for caddy access to tailscale.sock
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    networks:
+      - net
+    healthcheck:
+      test: tailscale status --peers=false --json | grep 'Online.*true'
+      start_period: 3s
+      interval: 1s
+      retries: 3
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:latest
+    environment:
+      CDY_DOMAIN: ${CONF_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_certs:/certs
+      - caddy_data:/data
+      - caddy_config:/config
+      - tailscale_sock:/var/run/tailscale/:ro # for access to tailscale.sock
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    restart: unless-stopped
+  
+  app:
+    image: fireflyiii/core:latest
+    #hostname: app
+    #container_name: firefly_iii_core
+    #ports:
+    #  - '80:8080'
+    volumes:
+      - firefly_iii_upload:/var/www/html/storage/upload
+    env_file: .env
+    networks:
+      - net
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: mariadb:lts
+    #hostname: db
+    #container_name: firefly_iii_db
+    volumes:
+      - firefly_iii_db:/var/lib/mysql
+    env_file: .db.env
+    networks:
+      - net
+    restart: unless-stopped
+
+  importer:
+    image: fireflyiii/data-importer:latest
+    #hostname: importer
+    #container_name: firefly_iii_importer
+    #Remove this comment, and add the "volumes" entry to map a folder
+    #("volume") to the /import directory inside the container.
+    #This can be used to import from a directory.
+    #volumes:
+    #  - /your-path-here/to/import:/import
+    env_file: .importer.env
+    #ports:
+    #  - '81:8080'
+    networks:
+      - net
+    depends_on:
+      - app 
+    restart: unless-stopped
+
+  cron:
+    #
+    # To make this work, set STATIC_CRON_TOKEN in your .env file or as an environment variable
+    # The STATIC_CRON_TOKEN must be *exactly* 32 characters long
+    # Use this URL for inspiration:
+    # https://www.random.org/strings/?num=1&len=32&digits=on&upperalpha=on&loweralpha=on&unique=on&format=html&rnd=new
+    #
+    image: alpine
+    container_name: firefly_iii_cron
+    command: sh -c "
+      apk add tzdata && \
+      (ln -fs /usr/share/zoneinfo/$$TZ /etc/localtime || true) && \
+      echo \"0 3 * * * wget -qO- http://app:8080/api/v1/cron/$$STATIC_CRON_TOKEN;echo\"
+      | crontab - && \
+      crond -f -L /dev/stdout"
+    env_file: .env
+    networks:
+      - net
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+   tailscale_sock:
+   caddy_certs:
+   caddy_config:
+   caddy_data:
+   firefly_iii_upload:
+   firefly_iii_db:
+
+networks:
+  net:
+    driver: bridge
