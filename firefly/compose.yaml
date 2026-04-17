@@ -80,8 +80,8 @@ services:
     #Remove this comment, and add the "volumes" entry to map a folder
     #("volume") to the /import directory inside the container.
     #This can be used to import from a directory.
-    #volumes:
-    #  - /your-path-here/to/import:/import
+    volumes:
+      - ../../docker-binds/firefly/import:/import
     env_file: .importer.env
     #ports:
     #  - '81:8080'
