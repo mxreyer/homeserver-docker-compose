@@ -1,4 +1,5 @@
 */tailscale/state
 **/.env
+**/.*.env
 borg4pi/repo
 borg4pi/data
