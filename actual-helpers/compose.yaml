@@ -1,0 +1,13 @@
+services:
+
+  actual-helpers:
+    image: ghcr.io/psybers/actual-helpers:latest
+    env_file: .env
+    volumes:
+      - ../../docker-binds/actual-helpers/cache:/usr/src/app/cache
+    networks:
+      - actual_net
+
+networks:
+  actual_net:
+    external: true
