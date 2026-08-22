@@ -9,7 +9,7 @@ services:
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_SERVE_CONFIG=/config/serve.json
     volumes:
-      - ../../docker-binds/tapo/tailscale/state:/var/lib/tailscale
+      - ../../docker-binds/tapo-controller/tailscale/state:/var/lib/tailscale
       - ./tailscale/config:/config # for the serve.json config file
     devices:
       - /dev/net/tun:/dev/net/tun
@@ -24,7 +24,7 @@ services:
       retries: 3
     restart: unless-stopped
 
-  tapo:
+  tapo-controller:
     # Source: https://github.com/mxreyer/tapo-controller
     image: ghcr.io/mxreyer/tapo-controller:latest
     volumes:
