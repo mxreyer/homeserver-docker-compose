@@ -3,3 +3,5 @@
 **/.*.env
 borg4pi/repo
 borg4pi/data
+tapo-controller/servers.json
+tapo-controller/ssh/*
