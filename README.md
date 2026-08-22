@@ -19,6 +19,7 @@ A collection of self-hosted services running via Docker Compose, configured with
 | **Stirling PDF** | PDF tools | PDF manipulation and conversion |
 | **Borg4Pi** | Backup/archival | Automated backup with Borg |
 | **Actual Helpers** | Budget utilities | Helper tools for Actual Budget |
+| **Tapo Controller** | Smart plug control | TP-Link Tapo plugs over LAN, with graceful SSH shutdown for plugs powering a server |
 
 ## Quick Start
 
@@ -88,6 +89,7 @@ homeserver-docker-compose/
 ├── stirling/            # PDF tools
 ├── borg4pi/             # Backup system
 ├── actual-helpers/      # Actual Budget helpers
+├── tapo-controller/     # Tapo smart plug control (app source in its own repo)
 └── README.md
 ```
 
@@ -117,6 +119,24 @@ docker compose logs -f <service-name>
 ```bash
 cd <service>
 docker compose up -d --force-recreate
+```
+
+## Self-authored services
+
+Most services here run an upstream image. **Tapo Controller** is the exception:
+it is written in-house, so the app source lives in its own repository and this
+repo carries only the deployment.
+
+- Source and issues: https://github.com/mxreyer/tapo-controller
+- Image: `ghcr.io/mxreyer/tapo-controller:latest`, built and published by CI on
+  every push to that repo's `main`
+
+`compose.yaml` here pulls that image rather than building, exactly like every
+other service. To pick up a new version:
+
+```bash
+cd tapo-controller
+docker compose pull && docker compose up -d
 ```
 
 ## Storage
