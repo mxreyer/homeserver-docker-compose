@@ -157,13 +157,53 @@ Configure per-service in:
 - `tailscale/config/serve.json` — Access rules
 - `.env` — Tailscale credentials
 
+## Selective Clone
+
+Use git's sparse checkout feature:
+
+```
+# 1. Clone without checking out files yet (much faster for large repos)
+git clone --filter=blob:none --no-checkout <repo-url> docker-compose
+cd docker-compose
+
+# 2. Enable sparse checkout in "cone" mode (simpler, faster, directory-based)
+git sparse-checkout init --cone
+
+# 3. Tell it which subfolder(s) you want
+git sparse-checkout set <folder1> <folder2> ...
+
+# 4. Actually check out the files
+git checkout main   # or whatever branch you're using
+```
+
+To stay up to date:
+
+```
+git pull
+```
+
+Add more folders
+
+```
+git sparse-checkout add <folder3> <folder4> ...
+```
+
+See current paths
+
+```
+git sparse-checkout list.
+```
+
+Go back to a full checkout
+
+```
+sparse-checkout disable.
+```
+
 ## Notes
 
 - `.env` and `.*env` files are gitignored (sensitive data)
 - Tailscale state directories are gitignored
 - Borg backup data (`borg4pi/repo`, `borg4pi/data`) is gitignored
 - Services use `restart: unless-stopped` by default
-
-## License
-
-Configuration and setup scripts are provided as-is.
+- Configuration and setup scripts are provided as-is.
