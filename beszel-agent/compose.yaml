@@ -1,0 +1,19 @@
+services:
+
+  beszel-agent:
+    image: henrygd/beszel-agent
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../../docker-binds/beszel-agent/beszel_agent_data:/var/lib/beszel-agent
+      # monitor other disks / partitions by mounting a folder in /extra-filesystems
+      # - /mnt/disk/.beszel:/extra-filesystems/sda1:ro
+    environment:
+      LISTEN: ${CONF_LISTEN}
+      KEY: ${CONF_LOCAL_AGENT_KEY}
+      TOKEN: ${CONF_LOCAL_AGENT_TOKEN} 
+      HUB_URL: https://${CONF_DOMAIN} 
+    network_mode: host # may be commented out if host network stats are not required
+    restart: unless-stopped
+
+networks:
+  net:
