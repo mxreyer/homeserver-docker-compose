@@ -2,6 +2,7 @@ services:
 
   beszel-agent:
     image: henrygd/beszel-agent
+    container_name: beszel-agent
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ../../docker-binds/beszel-agent/beszel_agent_data:/var/lib/beszel-agent
@@ -14,6 +15,3 @@ services:
       HUB_URL: https://${CONF_DOMAIN} 
     network_mode: host # may be commented out if host network stats are not required
     restart: unless-stopped
-
-networks:
-  net:
