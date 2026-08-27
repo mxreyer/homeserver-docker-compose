@@ -191,13 +191,13 @@ git sparse-checkout add <folder3> <folder4> ...
 See current paths
 
 ```
-git sparse-checkout list.
+git sparse-checkout list
 ```
 
 Go back to a full checkout
 
 ```
-sparse-checkout disable.
+sparse-checkout disable
 ```
 
 ## Notes
