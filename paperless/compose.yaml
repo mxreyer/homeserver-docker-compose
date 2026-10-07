@@ -84,13 +84,33 @@ services:
       PAPERLESS_URL: https://${CONF_DOMAIN}
       PAPERLESS_TIME_ZONE: America/Los_Angeles
       PAPERLESS_OCR_LANGUAGE: eng+deu
+      PAPERLESS_OCR_MODE: auto # native pdfs are not re-ocr'ed (already have embedded text), but scans are (no embedded text present).
+      PAPERLESS_POST_CONSUME_SCRIPT: /usr/src/paperless/scripts/post-consume.sh # Detects whether the *original* file had embedded text present.
+                                                                                # If not, adds the paperless-gpt-ocr-auto tag, so that paperless-gpt
+                                                                                # llm-based ocr runs and replaces the content field.
+                                                                                # In this way, scanned pdfs retain selectable ocr text embeddings
+                                                                                # (paperless-gpt does not provide this, need paperless-ngx built-in ocr),
+                                                                                # but the content field is a higher-quality llm-based ocr.
+                                                                                # The tag paperless-gpt-auto is applied to *all* documents.
       PAPERLESS_DATE_ORDER: MDY 
       PAPERLESS_OCR_ROTATE_PAGES_THRESHOLD: 20
+      PAPERLESS_AI_ENABLED: 1
+      PAPERLESS_AI_LLM_EMBEDDING_BACKEND: huggingface
+      PAPERLESS_AI_LLM_EMBEDDING_MODEL: intfloat/multilingual-e5-small
+      PAPERLESS_AI_LLM_INDEX_TASK_CRON: 15 5 * * *
+      PAPERLESS_AI_LLM_BACKEND: ollama
+      #PAPERLESS_AI_LLM_MODEL: llama3.2
+      PAPERLESS_AI_LLM_MODEL: "qwen3-vl-ocr" # this should agree with VISION_LLM_MODEL and LLM_MODEL to avoid constant loading/unloading
+      #PAPERLESS_AI_LLM_MODEL: phi4-mini
+      #PAPERLESS_AI_LLM_MODEL: "qwen3.5:9b"
+      PAPERLESS_AI_LLM_ENDPOINT: ${CONF_OLLAMA_ENDPOINT} 
+      #PAPERLESS_AI_LLM_API_KEY: 
     volumes:
       - data:/usr/src/paperless/data
       - media:/usr/src/paperless/media
       - ../../docker-binds/paperless/export:/usr/src/paperless/export
       - ../../docker-binds/paperless/consume:/usr/src/paperless/consume
+      - ../../docker-binds/paperless/scripts:/usr/src/paperless/scripts:ro
     networks:
       - net
     depends_on:
@@ -122,12 +142,121 @@ services:
     depends_on:
       - tailscale
     restart: unless-stopped
+  
+  tailscale-gpt:
+    image: tailscale/tailscale:latest
+    environment:
+      - TS_HOSTNAME=${CONF_HOSTNAME_GPT}
+      - TS_AUTH_KEY=${CONF_TS_KEY_GPT}
+      - TS_EXTRA_ARGS=--advertise-tags=tag:${CONF_TS_TAG_GPT}
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ../../docker-binds/paperless/tailscale_gpt/state:/var/lib/tailscale
+      - tailscale_sock_gpt:/tmp # for caddy access to tailscale.sock
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    networks:
+      - net
+    healthcheck:
+      test: tailscale status --peers=false --json | grep 'Online.*true'
+      start_period: 3s
+      interval: 1s
+      retries: 3
+    restart: unless-stopped
+
+  caddy-gpt:
+    image: caddy:latest
+    environment:
+      CDY_DOMAIN: ${CONF_DOMAIN_GPT}
+    volumes:
+      - ./Caddyfile_gpt:/etc/caddy/Caddyfile
+      - caddy_certs_gpt:/certs
+      - caddy_data_gpt:/data
+      - caddy_config_gpt:/config
+      - tailscale_sock_gpt:/var/run/tailscale/:ro # for access to tailscale.sock
+    network_mode: service:tailscale-gpt
+    depends_on:
+      tailscale-gpt:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gpt:
+    # Use one of these image sources:
+    image: icereed/paperless-gpt:latest # Docker Hub (upstream)
+    environment:
+      PAPERLESS_BASE_URL: "http://paperless-webserver-1:8000"
+      PAPERLESS_API_TOKEN: ${CONF_PAPERLESS_API_TOKEN}
+      PAPERLESS_PUBLIC_URL: ${CONF_DOMAIN}
+      MANUAL_TAG: "paperless-gpt"
+      AUTO_TAG: "paperless-gpt-auto"
+      FAIL_TAG: "paperless-gpt-failed"
+      # LLM Configuration
+      LLM_PROVIDER: "ollama"
+      LLM_MODEL: "qwen3-vl-ocr" # ideally, same model as VISION_LLM_MODEL to avoid constant loading/unloading
+      #LLM_MODEL: "qwen25-vl-ocr" # ideally, same model as VISION_LLM_MODEL to avoid constant loading/unloading
+      #LLM_MODEL: phi4-mini
+      #LLM_MODEL: "qwen3.5:9b"
+      OLLAMA_HOST: ${CONF_OLLAMA_ENDPOINT}
+      OLLAMA_CONTEXT_LENGTH: "8192" # Sets Ollama NumCtx (context window)
+      LLM_MAX_TOKENS: "256" # Sets Ollama num_predict (output-token budget)
+      OLLAMA_KEEP_ALIVE: "10m" # Keeps the model loaded between metadata requests
+      OLLAMA_THINK: "false" # true/false, or low/medium/high for supported models
+      #OLLAMA_HEADERS: "Authorization=Bearer mytoken" # Optional headers for reverse-proxy auth
+      TOKEN_LIMIT: 1000 # Recommended for smaller models
+      # OCR Configuration
+      OCR_PROVIDER: "llm" # Default OCR provider
+      VISION_LLM_PROVIDER: "ollama" # openai, ollama, mistral, or anthropic
+      #VISION_LLM_MODEL: "minicpm-v4.5" # minicpm-v (ollama) or gpt-4o (openai) or claude-sonnet-4-5 (anthropic/claude)
+      VISION_LLM_MODEL: "qwen3-vl-ocr" # ideally same model as LLM_MODEL to avoid constant loading/unloading
+      #VISION_LLM_MODEL: "qwen25-vl-ocr" # ideally same model as LLM_MODEL to avoid constant loading/unloading
+      #VISION_LLM_MODEL: "deepseek-ocr"
+      #VISION_LLM_MODEL: "PaddleOCR-VL"
+      #OLLAMA_HOST: ${CONF_OLLAMA_ENDPOINT} # If using Ollama
+      # OCR Processing Mode
+      OCR_PROCESS_MODE: "image" # Optional, default: image, other options: pdf, whole_pdf
+      PDF_SKIP_EXISTING_OCR: "false" # Optional, skip OCR for PDFs with existing OCR
+                                     # we only add the paperless-gpt-ocr-auto tag to pdfs that we actually want to process, to "false" is fine, here
+      # Enhanced OCR Features
+      CREATE_LOCAL_HOCR: "false" # Optional, save hOCR files locally
+      LOCAL_HOCR_PATH: "/app/hocr" # Optional, path for hOCR files
+      CREATE_LOCAL_PDF: "false" # Optional, save enhanced PDFs locally
+      LOCAL_PDF_PATH: "/app/pdf" # Optional, path for PDF files
+      PDF_UPLOAD: "false" # Optional, upload enhanced PDFs to paperless-ngx
+      PDF_REPLACE: "false" # Optional and DANGEROUS, delete original after upload
+      PDF_COPY_METADATA: "true" # Optional, copy metadata from original document
+      PDF_OCR_TAGGING: "true" # Optional, add tag to processed documents
+      PDF_OCR_COMPLETE_TAG: "paperless-gpt-ocr-complete" # Optional, tag name
+      AUTO_OCR_TAG: "paperless-gpt-ocr-auto" # Optional, default: paperless-gpt-ocr-auto
+      OCR_LIMIT_PAGES: "0" # Optional, default: 5. Set to 0 for no limit.
+      OCR_MAX_RETRIES: "3" # Optional, default: 3. Failed OCR attempts per document before it is fail-tagged and removed from the queue. Set to 0 to retry forever.
+      LOG_LEVEL: "info" # Optional: debug, warn, error
+    volumes:
+      - ../../docker-binds/paperless-gpt/prompts:/app/prompts # Mount the prompts directory
+      - ../../docker-binds/paperless-gpt/config:/app/config # Mount the config directory
+      # For local hOCR and PDF saving:
+      #- ./hocr:/app/hocr # Only if CREATE_LOCAL_HOCR is true
+      #- ./pdf:/app/pdf # Only if CREATE_LOCAL_PDF is true
+    networks:
+      - net
+    deploy:
+      resources:
+        reservations:
+          cpus: '0.01'
+          memory: 20M
+    depends_on:
+      - webserver
 
 volumes:
   tailscale_sock:
+  tailscale_sock_gpt:
   caddy_certs:
   caddy_config:
   caddy_data:
+  caddy_certs_gpt:
+  caddy_config_gpt:
+  caddy_data_gpt:
   data:
   media:
   pgdata:
