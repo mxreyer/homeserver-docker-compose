@@ -41,7 +41,7 @@ services:
       SMTP_PASSWORD: ${CONF_SMTP_PASSWORD}
       SMTP_PORT: ${CONF_SMTP_PORT}
       SMTP_AUTH_STRATEGY: ${CONF_SMTP_AUTH_STRATEGY}
-      OPENAI_API_KEY: ${CONF_OPENAI_API_KEY}
+      #OPENAI_API_KEY: ${CONF_OPENAI_API_KEY}
     network_mode: service:tailscale
     depends_on:
       tailscale:
