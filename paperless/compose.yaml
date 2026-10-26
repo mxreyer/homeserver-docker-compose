@@ -220,6 +220,7 @@ services:
       #OLLAMA_HOST: ${CONF_OLLAMA_ENDPOINT} # If using Ollama
       # OCR Processing Mode
       OCR_PROCESS_MODE: "image" # Optional, default: image, other options: pdf, whole_pdf
+      IMAGE_MAX_RENDER_DPI: "200"
       PDF_SKIP_EXISTING_OCR: "false" # Optional, skip OCR for PDFs with existing OCR
                                      # we only add the paperless-gpt-ocr-auto tag to pdfs that we actually want to process, to "false" is fine, here
       # Enhanced OCR Features
