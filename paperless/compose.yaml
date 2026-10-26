@@ -95,8 +95,11 @@ services:
       PAPERLESS_DATE_ORDER: MDY 
       PAPERLESS_OCR_ROTATE_PAGES_THRESHOLD: 20
       PAPERLESS_AI_ENABLED: 1
-      PAPERLESS_AI_LLM_EMBEDDING_BACKEND: huggingface
-      PAPERLESS_AI_LLM_EMBEDDING_MODEL: intfloat/multilingual-e5-small
+      #PAPERLESS_AI_LLM_EMBEDDING_BACKEND: huggingface
+      #PAPERLESS_AI_LLM_EMBEDDING_MODEL: intfloat/multilingual-e5-small
+      PAPERLESS_AI_LLM_EMBEDDING_BACKEND: ollama
+      PAPERLESS_AI_LLM_EMBEDDING_MODEL: qwen3-embedding:4b
+      PAPERLESS_AI_LLM_EMBEDDING_ENDPOINT: ${CONF_OLLAMA_ENDPOINT} 
       PAPERLESS_AI_LLM_INDEX_TASK_CRON: 15 5 * * *
       PAPERLESS_AI_LLM_BACKEND: ollama
       #PAPERLESS_AI_LLM_MODEL: llama3.2
@@ -199,7 +202,8 @@ services:
       #LLM_MODEL: phi4-mini
       #LLM_MODEL: "qwen3.5:9b"
       OLLAMA_HOST: ${CONF_OLLAMA_ENDPOINT}
-      OLLAMA_CONTEXT_LENGTH: "8192" # Sets Ollama NumCtx (context window)
+      OLLAMA_CONTEXT_LENGTH: "16384" # Sets Ollama NumCtx (context window)
+      PAPERLESS_AI_LLM_CONTEXT_SIZE: "16384"
       LLM_MAX_TOKENS: "256" # Sets Ollama num_predict (output-token budget)
       OLLAMA_KEEP_ALIVE: "10m" # Keeps the model loaded between metadata requests
       OLLAMA_THINK: "false" # true/false, or low/medium/high for supported models
