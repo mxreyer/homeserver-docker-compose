@@ -113,7 +113,7 @@ services:
       - media:/usr/src/paperless/media
       - ../../docker-binds/paperless/export:/usr/src/paperless/export
       - ../../docker-binds/paperless/consume:/usr/src/paperless/consume
-      - ../../docker-binds/paperless/scripts:/usr/src/paperless/scripts:ro
+      - ./scripts:/usr/src/paperless/scripts:ro
     networks:
       - net
     depends_on:
