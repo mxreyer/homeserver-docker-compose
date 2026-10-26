@@ -51,7 +51,7 @@ services:
       - OLLAMA_GPU_OVERHEAD=0
       - OLLAMA_CONTEXT_LENGTH=65536
       - OLLAMA_KV_CACHE_TYPE=q8_0
-      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_MAX_LOADED_MODELS=2
       - OLLAMA_MAX_QUEUE=4
     volumes:
       - ollama_data:/root/.ollama
